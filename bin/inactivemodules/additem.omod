@@ -1,0 +1,39 @@
+########!!! OWNER ONLY !!!##########
+
+#@ additem <list> <item> - adds a line to a list in files/lists
+# Usage format as follows
+# <trigger>additem smack hits | with a big sledge hammer !
+# The "|" is a delimiter and where the victim's name will end up.
+# ${target} in the item is turned into | as well, as it always was.
+if [[ "${whatSaid}" == "${trig}additem "* ]]
+then
+	rest="${whatSaid#"${trig}additem "}"
+	listname="${rest%% *}"
+	item=""
+	[[ "$rest" == *" "* ]] && item="${rest#* }"
+	listname="${listname,,}"
+	listname="${listname%.lst}.lst"
+	item="${item//'${target}'/|}"
+	item="${item//$'\r'/}"
+	if [[ ! "$listname" =~ ^[a-z0-9_-]{1,40}\.lst$ ]]
+	then
+		sendMessage "That is not a list name!"
+	elif [[ "$listname" == "owners.lst" || "$listname" == "channels.lst" ]]
+	then
+		sendMessage "'${listname}' is not a list you can add to this way"
+		botlog "$whoSaid tried additem on ${listname}"
+	elif [[ -z "$item" ]]
+	then
+		sendMessage "Usage: ${trig}additem <list> <item>"
+	else
+		if [[ ! -e "files/lists/${listname}" ]]
+		then
+			touch "files/lists/${listname}"
+			sendMessage "'${listname}' just created"
+			botlog "Created ${listname}"
+		fi
+		echo "$item" >> "files/lists/${listname}"
+		sendMessage "'${item}' successfully added to 'files/lists/${listname}'"
+		botlog "$whoSaid added '${item}' to ${listname}"
+	fi
+fi

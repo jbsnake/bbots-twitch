@@ -1,0 +1,31 @@
+#@ fortune [category]
+# On IRC the fortune went out as a private message, line by line. On Twitch
+# it is joined into one line and sent to the channel with an @mention.
+if [[ "${whatSaid}" == "${trig}fortune" || "${whatSaid}" == "${trig}fortune "* ]]
+then
+	ftype="${whatSaid#"${trig}fortune"}"
+	ftype="${ftype# }"
+	if ! command -v fortune > /dev/null
+	then
+		sendMessage "fortune is not installed on this machine"
+	elif [[ -n "$ftype" && ! "$ftype" =~ ^[a-z][a-z0-9_-]{0,30}$ ]]
+	then
+		sendMessage "${whoSaid}: That is not a fortune category!"
+	else
+		if [[ -n "$ftype" ]]
+		then
+			fortuneText="$(fortune -s -n 400 "$ftype" 2> /dev/null)"
+		else
+			fortuneText="$(fortune -s -n 400 2> /dev/null)"
+		fi
+		fortuneText="$(tr -s '[:space:]' ' ' <<< "$fortuneText")"
+		fortuneText="${fortuneText% }"
+		if [[ -z "$fortuneText" ]]
+		then
+			sendMessage "${whoSaid}: I have no fortunes like that"
+		else
+			sendPM "${whoSaid}" "${fortuneText}"
+			botlog "fortune for ${whoSaid}: ${fortuneText}"
+		fi
+	fi
+fi

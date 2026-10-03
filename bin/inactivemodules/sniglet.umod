@@ -1,0 +1,24 @@
+#########!!! ANY USER !!!###########
+
+#@ sniglet [number] - a random sniglet, or the one with that number
+if [[ "${snig_on:-no}" == "yes" ]]
+then
+	if [[ "${whatSaid}" == "${trig}sniglet" || "${whatSaid}" == "${trig}sniglet "* ]]
+	then
+		item="${whatSaid#"${trig}sniglet"}"
+		item="${item# }"
+		if [[ -z "$item" ]]
+		then
+			snigKeys=( "${!sniglet[@]}" )
+			item="${snigKeys[RANDOM % ${#snigKeys[@]}]}"
+			response="${whoSaid}: ${item}:${sniglet[item]}"
+		elif [[ "$item" =~ ^[0-9]{1,5}$ && -n "${sniglet[10#$item]}" ]]
+		then
+			response="${whoSaid}: ${sniglet[10#$item]}"
+		else
+			response="${whoSaid}: Please choose a number 1-${#sniglet[*]}"
+		fi
+		sendMessage "$response"
+		botlog "sniglet: ${response}"
+	fi
+fi

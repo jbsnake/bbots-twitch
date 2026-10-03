@@ -1,0 +1,7 @@
+#@ date
+if [[ "${whatSaid}" == "${trig}date" ]]
+then
+	response="The date here is now: $(date "+%a %b%e %Y")"
+	sendMessage "${response}"
+	botlog "<output> ${response} <end>"
+fi

@@ -1,0 +1,21 @@
+#@ uptime
+if [[ "${whatSaid}" == "${trig}botuptime" ]]
+then
+	read -r upSeconds _ < /proc/uptime
+	upSeconds="${upSeconds%%.*}"
+	days=$(( upSeconds / 86400 ))
+	hours=$(( upSeconds % 86400 / 3600 ))
+	minutes=$(( upSeconds % 3600 / 60 ))
+	if (( days > 0 ))
+	then
+		dayWord="days"
+		(( days == 1 )) && dayWord="day"
+		response="I've been up for ${days} ${dayWord}, ${hours} hours and ${minutes} minutes."
+	elif (( hours > 0 ))
+	then
+		response="I've been up for ${hours} hours and ${minutes} minutes."
+	else
+		response="I've been up for ${minutes} minutes."
+	fi
+	sendMessage "$response"
+fi

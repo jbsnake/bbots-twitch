@@ -1,0 +1,44 @@
+#@ smack <target>
+# Picks a random line from files/lists/smack.lst and puts the target wherever a | appears.
+if [[ "${whatSaid}" == "${trig}smack "* ]]
+then
+	if [[ ! -e files/lists/smack.lst ]]
+	then
+		sendMessage "smack.lst doesn't exist!"
+		botlog "smack.lst doesn't exist!"
+	elif [[ ! -s files/lists/smack.lst ]]
+	then
+		sendMessage "smack.lst is empty!  Try additem."
+		botlog "Nothing in smack.lst"
+	else
+		mapfile -t smack < files/lists/smack.lst
+		tmp="${smack[RANDOM % ${#smack[@]}]}"
+		tmp="${tmp%$'\r'}"
+		target="${whatSaid#"${trig}smack "}"
+		# "-#channel target" sends the smack to another channel the bot is in.
+		# Only owners may do that; for anyone else it lands in this channel.
+		where="$channel"
+		if [[ "$target" == -* ]]
+		then
+			chunk="${target%% *}"
+			chunk="${chunk#-}"
+			chunk="${chunk,,}"
+			if [[ "$target" == *" "* ]]
+			then
+				target="${target#* }"
+			else
+				target=""
+			fi
+			if [[ "$isOwner" == yes ]] && validChannel "$chunk" && [[ -n "$(onList "$channels" "$chunk")" ]]
+			then
+				where="$chunk"
+			fi
+		fi
+		target="${target//$'\001'/}"
+		target="${target:0:60}"
+		info="${tmp//|/"$target"}"
+		sendAction2 "$info" "$where"
+		botlog "smack: $info"
+		unset smack
+	fi
+fi

@@ -1,0 +1,351 @@
+########################################################################
+# pig2.umod  - Created by crouse & jbsnake
+# pig2 - The game of pig2.
+# The game of pig2 is a very simple dice game in which two or more
+#  players try to reach 100 points first. Each turn, a player repeatedly rolls
+#  the dice until either a 1 is rolled or the player holds and scores the
+#  sum of the rolls (i.e. the turn total). At any time during a player's
+#  turn, the player is faced with two decisions: roll or hold
+#
+#     * roll - If the player rolls a
+#           o 1: the player scores nothing and it becomes the opponent's turn.
+#           o 1 & 1 the player scores nothing and loses ALL points for the game so far.
+#           o 2 - 6: the number is added to the player's turn total and the player's turn continues.
+#
+#     * hold - The turn total is added to the player's score and it becomes the opponent's turn.
+#
+#  On Twitch every command lives under <trigger>pig :
+#
+#  <trigger>pig start player1 player2 ...  # admins: start a game, 2 to 10 players
+#  <trigger>pig roll      (or: pig r)      # roll on your turn
+#  <trigger>pig hold      (or: pig h)      # bank the turn's points
+#  <trigger>pig score                      # current scores
+#  <trigger>pig end                        # admins: end the game
+#  <trigger>pig stats [player]             # games won
+#  <trigger>pig rmstats                    # owners: wipe the win records
+#  <trigger>pig settings                   # show dice and goal for this channel
+#  <trigger>pig set goal <50-500>          # admins, between games
+#  <trigger>pig set dice <1|2>             # admins, between games
+#  <trigger>pig rules
+#
+#  Each channel has its own game and settings. pig2 files are stored in files/pig2/
+#		files/pig2/winners.lst                    (shared by all channels)
+#		files/pig2/{channel}/settings
+#	#####files below are removed after every game.#####
+#		files/pig2/{channel}/game/order.pig2
+#		files/pig2/{channel}/game/turn.pig2
+#		files/pig2/{channel}/game/{playername}-totalscore.pig2
+#		files/pig2/{channel}/game/{playername}-turnscore.pig2
+#
+#  Because the game lives in files, it survives a bot restart or a reload.
+########################################################################
+
+##################### START FUNCTIONS FOR pig2 GAME #####################
+
+# pigNum file -> prints the whole number stored in a file, or 0
+pigNum ()
+{
+	local n=""
+	[[ -r "$1" ]] && read -r n < "$1"
+	[[ "$n" =~ ^[0-9]{1,9}$ ]] || n=0
+	echo "$n"
+}
+
+pigOn ()        { [[ -s "${pigGame}/order.pig2" ]]; }
+
+# reads the player order and whose turn it is into ORDER and turnmarker
+pigLoad ()
+{
+	mapfile -t ORDER < "${pigGame}/order.pig2"
+	turnmarker="$(pigNum "${pigGame}/turn.pig2")"
+	(( turnmarker < ${#ORDER[@]} )) || turnmarker=0
+}
+
+pigNotPlaying ()
+{
+	sendMessage "Pig is currently not being played. Perhaps you could convince an admin to start a game?"
+}
+
+moveTurnmarker ()
+{
+	turnmarker=$(( (turnmarker + 1) % ${#ORDER[@]} ))
+	echo "$turnmarker" > "${pigGame}/turn.pig2"
+	sendMessage "*** It is now ${ORDER[turnmarker]}'s turn to roll."
+}
+
+# pigScores -> prints "name - points, name - points"
+pigScores ()
+{
+	local p list=""
+	for p in "${ORDER[@]}"
+	do
+		list="${list}, ${p} - $(pigNum "${pigGame}/${p}-totalscore.pig2")"
+	done
+	echo "${list#, }"
+}
+
+wipeOut ()
+{
+	echo "0" > "${pigGame}/$1-totalscore.pig2"
+	echo "0" > "${pigGame}/$1-turnscore.pig2"
+	sendMessage "*** $1 just lost all their points!"
+	moveTurnmarker
+}
+
+pushedIt ()
+{
+	echo "0" > "${pigGame}/$1-turnscore.pig2"
+	sendMessage "*** $1 received 0 points for a total of $(pigNum "${pigGame}/$1-totalscore.pig2")."
+	moveTurnmarker
+}
+
+pigend ()
+{
+	sendMessage "*** Final scores are: $(pigScores)"
+	rm -f "${pigGame}"/*.pig2
+	unset ORDER
+}
+
+##################### END FUNCTIONS FOR PIG GAME #####################
+
+if [[ "${whatSaid}" == "${trig}pig" || "${whatSaid}" == "${trig}pig "* ]]
+then
+	read -r pigCmd pigArgs <<< "${whatSaid#"${trig}pig"}"
+	pigCmd="${pigCmd,,}"
+	pigDir="files/pig2/${channel#\#}"
+	pigGame="${pigDir}/game"
+	pigWinners="files/pig2/winners.lst"
+	mkdir -p "$pigGame"
+	touch "$pigWinners"
+
+	# this channel's settings: number of dice, and the score that wins
+	dice=2
+	goal=100
+	if [[ -r "${pigDir}/settings" ]]
+	then
+		read -r pigSetDice pigSetGoal _ < "${pigDir}/settings"
+		[[ "$pigSetDice" =~ ^[12]$ ]] && dice="$pigSetDice"
+		[[ "$pigSetGoal" =~ ^[0-9]{2,3}$ ]] && goal="$pigSetGoal"
+	fi
+
+	case "$pigCmd" in
+		start)
+			if [[ "$isAdmin" != yes ]]
+			then
+				sendMessage "Sorry $whoSaid, only an admin can get a game started."
+			elif pigOn
+			then
+				sendMessage "*** A game is already being played here. ${trig}pig end stops it."
+			else
+				read -ra pigNames <<< "${pigArgs,,}"
+				pigPlayers=()
+				pigProblem=""
+				for pigName in "${pigNames[@]}"
+				do
+					pigName="${pigName#@}"
+					if [[ ! "$pigName" =~ ^[a-z0-9_]{1,25}$ ]]
+					then
+						pigProblem="*** '${pigName:0:30}' is not a Twitch name"
+						break
+					elif [[ "$pigName" == "$NICK" ]]
+					then
+						pigProblem="I can not be included in the playlist"
+						break
+					elif [[ " ${pigPlayers[*]} " != *" ${pigName} "* ]]
+					then
+						pigPlayers+=( "$pigName" )
+					fi
+				done
+				if [[ -n "$pigProblem" ]]
+				then
+					sendMessage "$pigProblem"
+				elif (( ${#pigPlayers[@]} < 2 ))
+				then
+					sendMessage "*** Pig needs at least 2 players: ${trig}pig start player1 player2"
+				elif (( ${#pigPlayers[@]} > 10 ))
+				then
+					sendMessage "*** Pig takes no more than 10 players"
+				else
+					# randomize the order of players
+					for (( pigI = ${#pigPlayers[@]} - 1; pigI > 0; pigI-- ))
+					do
+						pigJ=$(( RANDOM % (pigI + 1) ))
+						pigSwap="${pigPlayers[pigI]}"
+						pigPlayers[pigI]="${pigPlayers[pigJ]}"
+						pigPlayers[pigJ]="$pigSwap"
+					done
+					rm -f "${pigGame}"/*.pig2
+					printf '%s\n' "${pigPlayers[@]}" > "${pigGame}/order.pig2"
+					echo "0" > "${pigGame}/turn.pig2"
+					for pigName in "${pigPlayers[@]}"
+					do
+						echo "0" > "${pigGame}/${pigName}-totalscore.pig2"
+						echo "0" > "${pigGame}/${pigName}-turnscore.pig2"
+					done
+					sendMessage "*** PIG - A game of dice. First to ${goal} wins. Player Order: ${pigPlayers[*]}"
+					sendMessage "Ready ${pigPlayers[0]}!"
+					botlog "pig2: game started in ${channel} by ${whoSaid}: ${pigPlayers[*]}"
+				fi
+			fi
+			;;
+		roll|r)
+			if ! pigOn
+			then
+				pigNotPlaying
+			else
+				pigLoad
+				if [[ "$whoSaid" != "${ORDER[turnmarker]}" ]]
+				then
+					sendMessage "*** ${whoSaid}: it's not your turn, it's ${ORDER[turnmarker]}'s turn"
+				else
+					die1=$(( RANDOM % 6 + 1 ))
+					if [[ "$dice" == "2" ]]
+					then
+						die2=$(( RANDOM % 6 + 1 ))
+						sendMessage "${whoSaid} rolls a [${die1}] and a [${die2}]"
+						if (( die1 != 1 && die2 != 1 ))
+						then
+							ttotal=$(( $(pigNum "${pigGame}/${whoSaid}-turnscore.pig2") + die1 + die2 ))
+							echo "$ttotal" > "${pigGame}/${whoSaid}-turnscore.pig2"
+						elif (( die1 == 1 && die2 == 1 ))
+						then
+							wipeOut "$whoSaid"
+						else
+							pushedIt "$whoSaid"
+						fi
+					else
+						sendMessage "${whoSaid} rolls a [${die1}]"
+						if (( die1 != 1 ))
+						then
+							ttotal=$(( $(pigNum "${pigGame}/${whoSaid}-turnscore.pig2") + die1 ))
+							echo "$ttotal" > "${pigGame}/${whoSaid}-turnscore.pig2"
+						else
+							pushedIt "$whoSaid"
+						fi
+					fi
+				fi
+			fi
+			;;
+		hold|h)
+			if ! pigOn
+			then
+				pigNotPlaying
+			else
+				pigLoad
+				if [[ "$whoSaid" != "${ORDER[turnmarker]}" ]]
+				then
+					sendMessage "*** ${whoSaid}: it's not your turn, it's ${ORDER[turnmarker]}'s turn"
+				else
+					rtotal="$(pigNum "${pigGame}/${whoSaid}-turnscore.pig2")"
+					totalScore=$(( $(pigNum "${pigGame}/${whoSaid}-totalscore.pig2") + rtotal ))
+					echo "$totalScore" > "${pigGame}/${whoSaid}-totalscore.pig2"
+					echo "0" > "${pigGame}/${whoSaid}-turnscore.pig2"
+					if (( totalScore >= goal ))
+					then
+						echo "$(date "+%d%b%y @ %H:%M")-${whoSaid}:${totalScore}" >> "$pigWinners"
+						sendMessage "*** ${whoSaid} just won the game."
+						botlog "pig2: ${whoSaid} won in ${channel} with ${totalScore}"
+						pigend
+					else
+						sendMessage "*** ${whoSaid} received $rtotal points for a total of ${totalScore}."
+						moveTurnmarker
+					fi
+				fi
+			fi
+			;;
+		score)
+			if pigOn
+			then
+				pigLoad
+				sendMessage "*** Current scores are: $(pigScores) (it is ${ORDER[turnmarker]}'s turn)"
+			else
+				pigNotPlaying
+			fi
+			;;
+		end)
+			if [[ "$isAdmin" != yes ]]
+			then
+				sendMessage "Sorry $whoSaid, only an admin can end a game."
+			elif pigOn
+			then
+				pigLoad
+				pigend
+				botlog "pig2: game in ${channel} ended by ${whoSaid}"
+			else
+				pigNotPlaying
+			fi
+			;;
+		stats)
+			read -r wplayer _ <<< "${pigArgs,,}"
+			wplayer="${wplayer#@}"
+			[[ -z "$wplayer" ]] && wplayer="$whoSaid"
+			if [[ "$wplayer" =~ ^[a-z0-9_]{1,25}$ ]]
+			then
+				wins="$(grep -cE -- "-${wplayer}:[0-9]+\$" "$pigWinners")"
+				sendMessage "*** $wplayer has won $wins games."
+			else
+				sendMessage "*** That is not a Twitch name!"
+			fi
+			;;
+		rmstats)
+			# the win records are shared by every channel, so this is system level
+			if [[ "$isOwner" == yes ]]
+			then
+				: > "$pigWinners"
+				sendMessage "*** Stats reset."
+				botlog "pig2: stats reset by ${whoSaid}"
+			fi
+			;;
+		settings)
+			sendMessage "Hey ${whoSaid}! These are the current settings: Dice: $dice, Goal: $goal"
+			;;
+		set)
+			read -r arg1 arg2 _ <<< "${pigArgs,,}"
+			if [[ "$isAdmin" != yes ]]
+			then
+				sendMessage "Sorry $whoSaid, only an admin can change the settings."
+			elif pigOn
+			then
+				sendMessage "$whoSaid: Stop the game first, then try again."
+				botlog "pig2: $whoSaid tried to change settings mid-game in ${channel}"
+			else
+				case "$arg1" in
+					goal)	if [[ "$arg2" =~ ^[0-9]{2,3}$ ]] && (( 10#$arg2 >= 50 && 10#$arg2 <= 500 ))
+						then
+							goal=$(( 10#$arg2 ))
+							echo "$dice $goal" > "${pigDir}/settings"
+							sendMessage "*** New goal set to $goal"
+						else
+							sendMessage "*** The goal can only be between 50 and 500"
+						fi
+						;;
+					dice)	if [[ "$arg2" == "$dice" ]]
+						then
+							if [[ "$dice" == "2" ]]
+							then
+								sendMessage "*** You are already using $arg2 dice"
+							else
+								sendMessage "*** You are already using $arg2 die"
+							fi
+						elif [[ "$arg2" == "1" || "$arg2" == "2" ]]
+						then
+							dice="$arg2"
+							echo "$dice $goal" > "${pigDir}/settings"
+							sendMessage "*** Using $dice dice now!"
+						else
+							sendMessage "*** You can only choose 1 or 2 dice"
+						fi
+						;;
+					*)	sendMessage "*** ${trig}pig set goal <50-500> or ${trig}pig set dice <1|2>"
+						;;
+				esac
+			fi
+			;;
+		rules)
+			sendMessage "Pig: on your turn, ${trig}pig roll as often as you dare and the points add up. Roll a 1 and the turn's points are gone; double 1s wipe your whole score. ${trig}pig hold banks the points and passes the dice. First to ${goal} wins. Twitch blocks repeating the same message, so swap between ${trig}pig roll and ${trig}pig r."
+			;;
+		*)
+			sendMessage "*** ${trig}pig start <players> | roll | hold | score | end | stats [player] | settings | set goal <n> | set dice <1|2> | rules"
+			;;
+	esac
+fi

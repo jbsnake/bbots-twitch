@@ -1,0 +1,21 @@
+#@ ping <host> - pings a host five times from the bot's machine
+# The bot does nothing else while the ping runs (about five seconds).
+if [[ "${whatSaid}" == "${trig}ping "* ]]
+then
+	pingwho="${whatSaid#"${trig}ping "}"
+	if [[ ! "$pingwho" =~ ^[A-Za-z0-9][A-Za-z0-9.:-]{0,252}$ ]]
+	then
+		sendMessage "That is not a host name or address!"
+	else
+		if pingOut="$(timeout 20 ping -qc 5 -- "$pingwho" 2>&1)"
+		then
+			pingOut="$(grep -A 2 "statistics" <<< "$pingOut")"
+		fi
+		while IFS= read -r response
+		do
+			[[ -z "$response" ]] && continue
+			sendMessage "${response}"
+			botlog "<output> ${response} <end>"
+		done <<< "$pingOut"
+	fi
+fi

@@ -1,0 +1,7 @@
+#@ ?trig - tells anyone what the current trigger is
+# This one always answers to "?trig", whatever the trigger currently is.
+if [[ "${whatSaid}" == "?trig" ]]
+then
+	sendMessage "Current trigger is: '${trig}'"
+	channellog "<output> Current trigger is: '${trig}' <end>"
+fi

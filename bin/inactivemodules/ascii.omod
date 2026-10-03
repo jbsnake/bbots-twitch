@@ -1,0 +1,14 @@
+#@ ascii <new prefix> - changes what the bot puts in front of its replies
+# Lasts until the bot restarts; the default lives in files/config.
+if [[ "${whatSaid}" == "${trig}ascii "* ]]
+then
+	newascii="${whatSaid#"${trig}ascii "}"
+	if [[ "$newascii" == /* || "$newascii" == .* ]]
+	then
+		sendMessage "A prefix can't start with / or . - Twitch would read my replies as commands"
+	else
+		ascii="${newascii} "
+		sendMessage "ascii changed to '${newascii}'"
+		channellog "ascii changed to '${newascii}'"
+	fi
+fi

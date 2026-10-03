@@ -1,0 +1,18 @@
+#@ !trig <new trigger> - changes the command trigger, for every channel
+# This one always answers to "!trig", whatever the trigger currently is,
+# so there is a way back. Lasts until the bot restarts.
+if [[ "${whatSaid}" == "!trig "* ]]
+then
+	newtrig="${whatSaid#"!trig "}"
+	if [[ ! "$newtrig" =~ ^[^[:space:]]{1,5}$ ]]
+	then
+		sendMessage "A trigger is 1 to 5 characters with no spaces"
+	elif [[ "$newtrig" == /* ]]
+	then
+		sendMessage "A trigger can't start with / - Twitch keeps those for itself"
+	else
+		trig="$newtrig"
+		sendMessage "New trigger set: '${trig}'"
+		botlog "<output> New trigger set: '${trig}' by ${whoSaid} <end>"
+	fi
+fi

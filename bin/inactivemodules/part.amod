@@ -1,0 +1,33 @@
+#@ part [channel] - the bot leaves a channel
+# The broadcaster of a channel can send the bot away from their own
+# channel with a plain "part". Owners can name any channel.
+if [[ "${whatSaid}" == "${trig}part" || "${whatSaid}" == "${trig}part "* ]]
+then
+	newChannel="${whatSaid#"${trig}part"}"
+	newChannel="${newChannel# }"
+	newChannel="${newChannel,,}"
+	[[ -z "$newChannel" ]] && newChannel="$channel"
+	[[ "$newChannel" == \#* ]] || newChannel="#${newChannel}"
+	if [[ "$isOwner" != yes && "$isBroadcaster" != yes ]]
+	then
+		sendMessage "*** Sorry ${whoSaid}, only the broadcaster can send me away"
+	elif [[ "$isOwner" != yes && "$newChannel" != "$channel" ]]
+	then
+		sendMessage "*** Sorry ${whoSaid}, you can only send me away from your own channel"
+	elif ! validChannel "$newChannel"
+	then
+		sendMessage "*** That is not a channel name!"
+	elif [[ "$newChannel" == "$HOME_CHANNEL" ]]
+	then
+		sendMessage "*** ${HOME_CHANNEL} is my home channel, I can't leave it"
+	elif [[ -z "$(onList "$channels" "$newChannel")" ]]
+	then
+		sendMessage "*** I am not in ${newChannel}"
+	else
+		sendMessage "*** Leaving ${newChannel}"
+		rmFromList "$channels" "$newChannel"
+		sendCom "PART" "$newChannel"
+		unset "botPriv[$newChannel]"
+		botlog "<output> PART $newChannel (asked by $whoSaid) <end>"
+	fi
+fi

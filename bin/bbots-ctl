@@ -1,0 +1,218 @@
+#!/usr/bin/env bash
+#
+#    FILE: bbots-ctl
+#    bbots (Twitch port) - talk to the running bot from this machine,
+#    without anything appearing in chat
+#
+#    Copyright (C) 2007 Joshua Bailey and Dave Crouse
+#    Licensed under the GNU GPL, version 2 or (at your option) any later version.
+#
+#    Usage:
+#      bin/bbots-ctl [-c '#channel'] [-l] [-n name] <command>
+#      bin/bbots-ctl [-c '#channel'] [-l] [-n name]     (no command: a prompt)
+#
+#    At the prompt, /loud and /quiet switch where replies go, +<command>
+#    sends one command loud, /channel <name> changes channel and
+#    /name <name> changes the name commands run under and saves it in
+#    files/config. /help lists these.
+#
+#      -c  the channel the command should act in (default: the home channel)
+#      -l  loud: the bot's replies go to that channel instead of coming back here
+#      -n  the name to run this one command under, without saving it. The
+#          name shows where a module addresses whoever asked.
+#          (default: CONSOLE_NAME in files/config, or bot-handler)
+#
+#    Commands run as an owner. The trigger is optional:
+#      bin/bbots-ctl modules
+#      bin/bbots-ctl load pig2.umod
+#      bin/bbots-ctl -c '#somechannel' pig score
+#      bin/bbots-ctl -l smack crouse
+#
+#    Only your own user can reach the bot this way: the control pipe lives
+#    in run/, which nobody else can open.
+
+cd "$(dirname "$(readlink -f "$0")")/.." || exit 1
+source files/config
+
+runDir="run"
+conChannel="$CHANNEL"
+conMode="Q"
+conName="${CONSOLE_NAME:-bot-handler}"
+WAIT="${CTL_WAIT:-45}"
+
+# validName name -> letters, digits, _ and - only, 25 at most
+validName ()    { [[ "$1" =~ ^[A-Za-z0-9_-]{1,25}$ ]]; }
+
+# saveName name -> writes CONSOLE_NAME into files/config so it lasts.
+# The name has already passed validName, so it is safe to put in the file.
+saveName ()
+{
+	local comment="# the name bbots-ctl commands run under"
+	if grep -q '^CONSOLE_NAME=' files/config
+	then
+		sed -i "s/^CONSOLE_NAME=.*/CONSOLE_NAME=\"$1\"   ${comment}/" files/config
+	elif grep -q '^ascii=' files/config
+	then
+		sed -i "/^ascii=/a CONSOLE_NAME=\"$1\"   ${comment}" files/config
+	else
+		printf 'CONSOLE_NAME="%s"   %s\n' "$1" "$comment" >> files/config
+	fi
+}
+
+while getopts ":c:ln:" opt
+do
+	case "$opt" in
+		c)	conChannel="${OPTARG,,}"
+			[[ "$conChannel" == \#* ]] || conChannel="#${conChannel}"
+			;;
+		l)	conMode="L" ;;
+		n)	if validName "$OPTARG"
+			then
+				conName="${OPTARG,,}"
+			else
+				echo "A name is letters, digits, _ and - only, 25 at most." >&2
+				exit 1
+			fi
+			;;
+		*)	sed -n '/^#    Usage:/,/^#      bin\/bbots-ctl -l smack/p' "$0" | sed 's/^# \{0,4\}//'
+			exit 1
+			;;
+	esac
+done
+shift $(( OPTIND - 1 ))
+
+botRunning ()
+{
+	local p=""
+	[[ -s "${runDir}/startbot.pid" ]] && p="$(< "${runDir}/startbot.pid")"
+	[[ "$p" =~ ^[0-9]+$ ]] && grep -qs "startbot" "/proc/${p}/cmdline" && [[ -p "${runDir}/control" ]]
+}
+
+# sendCommand text -> hands one command to the bot and prints its reply
+sendCommand ()
+{
+	local id reply waited=0
+	if ! botRunning
+	then
+		echo "bbots is not running. Start it with bin/startbot.sh" >&2
+		return 1
+	fi
+	id="c${$}x${RANDOM}${RANDOM}"
+	reply="${runDir}/reply.${id}"
+	if ! timeout 5 bash -c 'printf "%s\n" "$1" > "$2"' _ "${EPOCHSECONDS} ${id} ${conMode} ${conChannel} ${conName} :$1" "${runDir}/control"
+	then
+		echo "The bot did not take the command." >&2
+		return 1
+	fi
+	while [[ ! -e "${reply}.done" ]]
+	do
+		sleep 0.1
+		waited=$(( waited + 1 ))
+		if (( waited > WAIT * 10 ))
+		then
+			echo "No reply within ${WAIT} seconds. The bot may be reconnecting or busy." >&2
+			rm -f "$reply" "${reply}.done"
+			return 1
+		fi
+	done
+	if [[ -s "$reply" ]]
+	then
+		cat "$reply"
+	elif [[ "$conMode" == "L" ]]
+	then
+		echo "(sent; any reply went to ${conChannel})"
+	else
+		echo "(no reply)"
+	fi
+	rm -f "$reply" "${reply}.done"
+}
+
+if (( $# > 0 ))
+then
+	validName "$conName" || conName="bot-handler"
+	conName="${conName,,}"
+	sendCommand "$*"
+	exit "$?"
+fi
+
+consoleHelp ()
+{
+	echo "  <command>          run it; the reply comes back here unless loud is on"
+	echo "  +<command>         run just this one loud (the reply goes to the channel)"
+	echo "  /loud              every reply goes to the channel from now on"
+	echo "  /quiet             every reply comes back here from now on"
+	echo "  /channel <name>    act in another channel the bot is in"
+	echo "  /name <name>       change the name commands run under, and save it (now: ${conName})"
+	echo "  /help              this list"
+	echo "  quit               leave the console (the bot keeps running)"
+}
+
+validName "$conName" || conName="bot-handler"
+conName="${conName,,}"
+echo "bbots console, running commands as ${conName}. /help lists the console's own commands; quit leaves."
+while true
+do
+	if [[ "$conMode" == "L" ]]
+	then
+		promptText="bbots ${conChannel} (loud)> "
+	else
+		promptText="bbots ${conChannel}> "
+	fi
+	IFS= read -e -r -p "$promptText" line || break
+	[[ -z "$line" ]] && continue
+	history -s -- "$line"
+	case "$line" in
+		quit|exit)
+			break
+			;;
+		/loud)	conMode="L"
+			echo "Replies now go to ${conChannel}."
+			;;
+		/quiet)	conMode="Q"
+conName="${CONSOLE_NAME:-bot-handler}"
+			echo "Replies now come back here."
+			;;
+		/channel\ *)
+			newChannel="${line#/channel }"
+			newChannel="${newChannel,,}"
+			newChannel="${newChannel// /}"
+			[[ "$newChannel" == \#* ]] || newChannel="#${newChannel}"
+			if [[ "$newChannel" =~ ^#[a-z0-9_]{1,25}$ ]]
+			then
+				conChannel="$newChannel"
+			else
+				echo "That is not a channel name."
+			fi
+			;;
+		/name\ *)
+			newName="${line#/name }"
+			newName="${newName// /}"
+			if validName "$newName"
+			then
+				conName="${newName,,}"
+				if saveName "$conName"
+				then
+					echo "Commands now run as ${conName}. Saved to files/config, so it stays that way."
+				else
+					echo "Commands now run as ${conName}, but files/config could not be updated."
+				fi
+			else
+				echo "A name is letters, digits, _ and - only, 25 at most."
+			fi
+			;;
+		/help)	consoleHelp
+			;;
+		/*)	echo "Not a console command. /help lists them."
+			;;
+		+*)	# one loud command, then back to whatever the mode was
+			savedMode="$conMode"
+			conMode="L"
+			oneOff="${line#+}"
+			sendCommand "${oneOff# }"
+			conMode="$savedMode"
+			;;
+		*)	sendCommand "$line"
+			;;
+	esac
+done
+echo

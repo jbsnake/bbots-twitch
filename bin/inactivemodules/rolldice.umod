@@ -1,0 +1,44 @@
+# rolldice - crouse & jbsnake
+# usage: <trigger>rolldice [dice sides throws]    defaults: 2 dice, 6 sides, 1 throw
+if [[ "${whatSaid}" == "${trig}rolldice" || "${whatSaid}" == "${trig}rolldice "* ]]
+then
+	read -r total sides times _ <<< "${whatSaid#"${trig}rolldice"}"
+	total="${total:-2}"
+	sides="${sides:-6}"
+	times="${times:-1}"
+	if [[ ! "$total" =~ ^[0-9]{1,4}$ || ! "$sides" =~ ^[0-9]{1,4}$ || ! "$times" =~ ^[0-9]{1,4}$ ]]
+	then
+		sendMessage "Usage: ${trig}rolldice [dice sides throws] - whole numbers only"
+		channellog "$whoSaid tried rolldice with something that is not a number"
+	else
+		# 10# stops a leading zero being read as octal
+		total=$(( 10#$total ))
+		sides=$(( 10#$sides ))
+		times=$(( 10#$times ))
+		if (( total < 1 || total > 5 ))
+		then
+			sendMessage "Number of dice must be between 1 and 5"
+			channellog "$whoSaid tried $total for number of dice"
+		elif (( times < 1 || times > 5 ))
+		then
+			sendMessage "Throws must be between 1 and 5"
+			channellog "$whoSaid tried $times for a throw number"
+		elif (( sides < 2 ))
+		then
+			sendMessage "That's not physically possible!"
+			channellog "$whoSaid tried a ${sides}-sided die!"
+		else
+			sendMessage "$whoSaid rolled ${total}-${sides} sided dice, ${times} times"
+			for (( throw = 1; throw <= times; throw++ ))
+			do
+				str=""
+				for (( die = 1; die <= total; die++ ))
+				do
+					str="${str} [$(( RANDOM % sides + 1 ))]"
+				done
+				sendMessage "Roll #${throw}:${str}"
+			done
+			channellog "<o> $whoSaid rolled ${total}-${sides} sided dice, $times times <end>"
+		fi
+	fi
+fi

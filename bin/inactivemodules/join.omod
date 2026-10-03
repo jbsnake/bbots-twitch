@@ -1,0 +1,21 @@
+#@ join <channel> - owners send the bot into another channel
+# The channel is remembered in files/lists/channels.lst, so the bot
+# goes back there after a restart.
+if [[ "${whatSaid}" == "${trig}join "* ]]
+then
+	newChannel="${whatSaid#"${trig}join "}"
+	newChannel="${newChannel,,}"
+	[[ "$newChannel" == \#* ]] || newChannel="#${newChannel}"
+	if ! validChannel "$newChannel"
+	then
+		sendMessage "*** That is not a channel name!"
+	elif [[ -n "$(onList "$channels" "$newChannel")" ]]
+	then
+		sendMessage "*** I am already in ${newChannel}"
+	else
+		echo "$newChannel" >> "$channels"
+		sendCom "JOIN" "$newChannel"
+		sendMessage "*** Joining ${newChannel}"
+		botlog "<output> JOIN $newChannel (asked by $whoSaid) <end>"
+	fi
+fi

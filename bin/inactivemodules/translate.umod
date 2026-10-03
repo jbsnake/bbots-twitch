@@ -1,0 +1,60 @@
+#@ translate <language> <word or short phrase>
+# example: <trigger>translate spanish dog
+# In 2007 this scraped dictionary.reference.com with lynx. That page is gone,
+# so it now asks the free MyMemory service (no key, about 5000 characters a
+# day). It translates from English, as the original did. Needs curl and jq.
+# The bot does nothing else while it waits for the answer (8 seconds at most).
+if [[ "${whatSaid}" == "${trig}translate "* ]]
+then
+	read -r language word <<< "${whatSaid#"${trig}translate "}"
+	language="${language,,}"
+	case "$language" in
+		spanish)	langCode="es" ;;
+		french)		langCode="fr" ;;
+		german)		langCode="de" ;;
+		italian)	langCode="it" ;;
+		portuguese)	langCode="pt" ;;
+		dutch)		langCode="nl" ;;
+		swedish)	langCode="sv" ;;
+		norwegian)	langCode="no" ;;
+		danish)		langCode="da" ;;
+		finnish)	langCode="fi" ;;
+		polish)		langCode="pl" ;;
+		russian)	langCode="ru" ;;
+		greek)		langCode="el" ;;
+		turkish)	langCode="tr" ;;
+		japanese)	langCode="ja" ;;
+		korean)		langCode="ko" ;;
+		chinese)	langCode="zh-CN" ;;
+		hindi)		langCode="hi" ;;
+		arabic)		langCode="ar" ;;
+		hebrew)		langCode="he" ;;
+		latin)		langCode="la" ;;
+		*)		langCode="" ;;
+	esac
+	word="${word:0:80}"
+	if [[ -z "$langCode" ]]
+	then
+		sendMessage "Sorry, I can not translate to \"${language:0:20}\". I know: spanish french german italian portuguese dutch swedish norwegian danish finnish polish russian greek turkish japanese korean chinese hindi arabic hebrew latin"
+	elif [[ -z "$word" ]]
+	then
+		sendMessage "Usage: ${trig}translate <language> <word>"
+	elif ! command -v curl > /dev/null || ! command -v jq > /dev/null
+	then
+		sendMessage "translate needs curl and jq on this machine"
+	else
+		response="$(curl -sS --max-time 8 --get --data-urlencode "q=${word}" --data-urlencode "langpair=en|${langCode}" "https://api.mymemory.translated.net/get" 2> /dev/null | jq -r '.responseData.translatedText // empty' 2> /dev/null)"
+		if [[ -z "$response" ]]
+		then
+			sendMessage "Sorry, I can not translate \"${word}\" to ${language}"
+			channellog "can not translate \"${word}\" to ${language}"
+		elif [[ "$response" == *"MYMEMORY WARNING"* ]]
+		then
+			sendMessage "Sorry, I have used up today's free translations"
+			botlog "translate: daily MyMemory limit reached"
+		else
+			sendMessage "\"${word}\" in ${language^}: ${response}"
+			channellog "<output> \"${word}\" in ${language^}: ${response} <end>"
+		fi
+	fi
+fi

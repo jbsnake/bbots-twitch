@@ -1,0 +1,36 @@
+########!!! OWNER ONLY !!!##########
+
+#@ sniglet_on - reads files/lists/sniglets.lst into memory and switches sniglet on
+if [[ "${whatSaid}" == "${trig}sniglet_on" ]]
+then
+	if [[ "${snig_on:-no}" == "no" ]]
+	then
+		if [[ -r files/lists/sniglets.lst ]]
+		then
+			sniglet=()
+			while IFS='|' read -r iter tsnig
+			do
+				tsnig="${tsnig%$'\r'}"
+				[[ "$iter" =~ ^[0-9]{1,5}$ ]] && sniglet[10#$iter]="$tsnig"
+			done < files/lists/sniglets.lst
+			snig_on="yes"
+			sendMessage "sniglet: on"
+			botlog "sniglet: on"
+		else
+			sendMessage "sniglets.lst doesn't exist!"
+			botlog "sniglets.lst doesn't exist!"
+		fi
+	fi
+fi
+
+#@ sniglet_off
+if [[ "${whatSaid}" == "${trig}sniglet_off" ]]
+then
+	if [[ "${snig_on:-no}" == "yes" ]]
+	then
+		snig_on="no"
+		unset sniglet
+		sendMessage "sniglet: off"
+		botlog "sniglet: off"
+	fi
+fi

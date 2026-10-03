@@ -1,0 +1,24 @@
+# secrets and settings: never publish these
+files/.token
+files/.token.new
+files/.refresh
+files/.refresh.new
+files/config
+
+# made while the bot runs
+logs/*
+!logs/.gitkeep
+run/
+bin/anyuser-modules
+bin/admin-modules
+bin/owner-modules
+bin/*-modules.*
+
+# belongs to one install: who owns the bot, where it sits, its games
+files/lists/owners.lst
+files/lists/channels.lst
+files/lists/admins/
+files/pig2/
+
+# supply your own; see sniglets.lst.example
+files/lists/sniglets.lst

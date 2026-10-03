@@ -1,0 +1,7 @@
+#@ time - crouse & jbsnake
+if [[ "${whatSaid}" == "${trig}time" ]]
+then
+	response="The time here is now: $(date "+%r")"
+	sendMessage "${response}"
+	channellog "<output> ${response} <end>"
+fi

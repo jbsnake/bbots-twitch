@@ -1,0 +1,227 @@
+README FILE:
+
+DATE: 10-03-2026  (Twitch port)   Original: 02-02-2007
+
+bbots is a chat bot written in bash. It began as an IRC bot in 2005 and
+was released in 2007. This is BETA 3.0, the same bot moved to Twitch chat.
+
+QUICKSTART:
+cd into the bbots directory and then
+./runme.sh
+
+Choose 1 to start the bot. Choose 11 for a console that talks to it.
+
+^^^^^ hows that for quick. ?  :)
+
+FIRST TIME ON A NEW MACHINE:
+1. Register an application at https://dev.twitch.tv/console
+   (Category: Chat Bot, Client Type: Public, Redirect URL: http://localhost)
+   and copy its Client ID.
+2. Run ./runme.sh once. It creates files/config from files/config.example.
+   Choose 4 and set CHANNEL (the bot's home channel), NICK (the bot
+   account's Twitch login) and CLIENT_ID.
+3. Choose 12, then 2, and approve the code it shows, in a browser logged
+   in to Twitch as the BOT account.
+4. In the home channel, as the broadcaster: /mod <the bot account>
+   A bot that is a moderator may talk faster.
+5. Choose 1 to start the bot.
+6. Every module ships inactive. Choose 11 for the console and load the
+   ones you want, for example:  load time.umod
+
+The broadcaster of the home channel is the bot's first owner.
+
+REQUIREMENTS:
+Bashbot Requires:
+bash  - version 5 or newer
+ncat  - holds the TLS connection to Twitch. It comes with nmap. This does
+        the job ntcpclient did in 2007 (see HISTORY).
+curl and jq - for the Twitch login (bin/gettoken.sh) and the translate module
+Optional:
+fortune - for the fortune module (the fortune-mod package)
+ping    - for the ping module
+
+########################################################
+# Copyright (C) 2007                                   #
+# Joshua Bailey <jbsnake NOSPAMat usalug.net> and      #
+# Dave Crouse <crouse NOSPAMat usalug.net>             #
+# All rights reserved.                                 #
+#                                                      #
+########################################################
+#
+##########################
+# USA Linux Users Group  #
+# http://www.usalug.org  #
+# http://bashscripts.org #
+# http://bbots.org       #
+# http://bbips.org       #
+##########################
+#
+#########################################################################
+#  This software is licensed under the GPL - GNU General Public License #
+#########################################################################
+#                                                                       #
+# This program is free software; you can redistribute it and/or modify  #
+# it under the terms of the GNU General Public License as published by  #
+# the Free Software Foundation; either version 2 of the License, or     #
+# (at your option) any later version.                                   #
+#                                                                       #
+# This program is distributed in the hope that it will be useful,       #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of        #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         #
+# GNU General Public License for more details.                          #
+#                                                                       #
+# You should have received a copy of the GNU General Public License     #
+# along with this program; if not, write to the Free Software           #
+# Foundation, Inc.                                                      #
+# 59 Temple Place, Suite 330                                            #
+# Boston, MA  02111-1307  USA                                           #
+#                                                                       #
+#########################################################################
+
+
+WHO CAN DO WHAT:
+There are three tiers of people, and a module's file ending says which
+tier may use it.
+
+owner   .omod   Anyone on files/lists/owners.lst, in any channel. System
+                level: loading and unloading modules, the owner list,
+                sending the bot into other channels.
+admin   .amod   Per channel: that channel's broadcaster, its moderators,
+                and anyone on its admin list. Admins cannot touch the
+                module system or any other channel.
+anyone  .umod   Everybody in chat.
+
+THE BUILT-IN COMMANDS:
+(shown with the default trigger, which is !)
+
+Owners:
+!modules                      list active and inactive modules
+!load <module>                move a module from inactive to active
+!unload <module>              and back again
+!o2u !u2o !o2a !a2o !u2a !a2u <module>
+                              change a module's tier. The letter after
+                              the 2 is the tier it moves to.
+!owner list | add <name> | rm <name>
+
+Admins:
+!admin list                   this channel's admins
+!admin add <name> | rm <name> the broadcaster or an owner only
+
+Loading and unloading take effect at once. The bot does not restart.
+
+THE MODULES:
+additem.omod    !additem <list> <item>   add a line to a list in files/lists
+ascii.omod      !ascii <prefix>          change what the bot puts before its replies
+date.umod       !date
+fortune.umod    !fortune [category]
+join.omod       !join <channel>          send the bot into another channel
+part.amod       !part [channel]          a broadcaster sends the bot away from
+                                         their own channel; owners can name any
+pig2.umod       !pig                     the dice game. !pig alone lists its commands
+ping.omod       !ping <host>
+rolldice.umod   !rolldice [dice sides throws]
+smack.umod      !smack <target>
+sniglet.omod    !sniglet_on, !sniglet_off
+sniglet.umod    !sniglet [number]        needs files/lists/sniglets.lst, which
+                                         you supply: one per line, as number|text
+                                         (see sniglets.lst.example)
+time.umod       !time
+translate.umod  !translate <language> <word>
+trig.omod       !trig <new trigger>      always answers to !trig
+trig.umod       ?trig                    always answers to ?trig
+uptime.umod     !botuptime               how long the bot's machine has been up
+
+A module is a piece of bash that looks at ${whatSaid} and answers with
+sendMessage or sendAction. Read one of the small ones (time.umod, date.umod)
+and you know how to write your own. Put new modules in bin/inactivemodules
+and load them.
+
+THE CONSOLE:
+bin/bbots-ctl talks to the running bot from the machine it runs on, without
+anything appearing in chat.
+
+bin/bbots-ctl modules              one command; the reply comes back to you
+bin/bbots-ctl                      a prompt, for several in a row
+bin/bbots-ctl -l smack crouse      -l is loud: the reply goes to the channel
+bin/bbots-ctl -c '#channel' ...    act in another channel the bot is in
+
+At the prompt: +<command> sends one command loud, /loud and /quiet switch
+for everything after, /channel <name> changes channel, /name <name> changes
+the name console commands run under (and saves it), /help lists these.
+
+Console commands run as an owner, under the name in CONSOLE_NAME
+(bot-handler unless you change it).
+
+THE TWITCH LOGIN:
+The bot logs in with its own token, kept in files/.token and renewed by
+the bot itself each time it connects.
+
+bin/gettoken.sh check      whose token is saved, and how long it lasts
+bin/gettoken.sh login      log the bot account in again
+
+If the bot has been off for more than about 30 days, it will say it has no
+usable token. Run login again, or use option 12 in runme.sh.
+
+HISTORY:
+This project is really the brainchild of Joshua Bailey. (aka jbsnake). He was looking for something fun to code in bash, (2005) and decided that there weren't any bash bots coded that interested him much. He did find some code from jasonwoof.orgv (see below), but it wasn't complete, and was basically just the foundation for what was to become bashbots. I doubt there is even a line of the original code in the bashbot.sh file..... but there might be one or two. It was the original idea that we would like to give Jason credit for. The implementation is all us baby !!!!!  :)
+
+jbsnake had been messing around with creating a bash bot for awhile, mainly re-writing and creating a new bashbot.sh and startme.sh files..... and he invited me to join him and play (still 2005). (I'm crouse btw). I joined and started writing the runme.sh file and working on mods here and there. We worked on building a base bashbot and some modules for all of 2006. Sometimes months would go by with neither of us doing much to bbots. In 2005 we applied to sf.net for the bbots name and I registered bbots.org, knowing SOME day we would actually release some code :)
+
+In early 2007, we asked Nukes (aka Richard Whitty) to code an opensource tcpclient in c, and he did. He also agreed to gpl it so we could release bbots with an included binary (and source code) to make running the bots a simpler process. The first release of bbots "beta .10" was in early 2007.
+
+THE TWITCH PORT (2026):
+In October 2026 jbsnake found a copy of BETA 2.0 from June 2007 on a backup drive and moved it to Twitch chat. It is still bash, modules still load and unload without a restart, and most of the original modules came along. The port was written with the help of an AI assistant (Claude).
+
+What changed, and why:
+- ntcpclient is retired. Twitch requires an encrypted connection, so ncat holds it. Thanks again Nukes: the design ntcpclient made possible is the one still in use.
+- NickServ and ChanServ are gone. The bot logs in with a token from Twitch.
+- The bot can sit in many channels. The join and part modules manage that.
+- A third tier, admin, sits between owner and anyone, so a channel's own broadcaster and moderators have some say in their channel without reaching the module system.
+- The trigger is ! (it was .) because Twitch keeps . and / for itself.
+- Twitch bots cannot send private messages over chat, so anything that used to be a private message is said in the channel.
+- Modules check what they are given. In 2007 the bot sat in a channel of friends. Twitch chat is public.
+- pig2's commands all live under !pig, and each channel has its own game. The 2007 win records carry over.
+- translate asks the MyMemory service, since the page it used to read is gone.
+- uptime answers to !botuptime, because !uptime means something else on Twitch.
+
+What was left behind:
+- irccommands (op, deop, kick). This is an entertainment bot, not a moderator.
+- beep and beep_toggle.
+- cal. Eight lines of calendar is a lot for Twitch chat.
+The originals of all of these are in the 2007 release.
+
+THE ORIGINAL IDEA:
+http://jasonwoof.org/4th/__images/__images/jason_s_old_programming_projects
+QUOTE:  "Here are some of my former programming projects. I don't work on these anymore, or have any intention to work on them in the future. But they are all still available under the terms of the GNU GPL so anyone is free to take over where I left off."
+
+So we did....... you can see some of his original code in the bashbot.sh file (not much of his code really remains, but it was what we started with).  Most of it was re-written and changed.  Thanks Jason for providing the code under the GPL, we appreciate it.  :)  We have greatly modified and expanded the original code and it really doesn't even resemble what Jason started with anymore, but we felt he should be acknowledged and wanted to thank him.
+
+THE CODE TREE:
+
+The basic directory structure is:
+bbots-twitch
+      runme.sh                the menu
+      /bin
+      |   startbot.sh         opens the connection, keeps the bot running
+      |   bashbot.sh          the bot's main loop
+      |   bbots-ctl           the console
+      |   gettoken.sh         the Twitch login
+      |   /modules            active modules
+      |   /inactivemodules    modules waiting to be loaded
+      |   /libs               .functions, .core (owner commands),
+      |                       .admincore (admin commands)
+      |
+      /files
+      |   config
+      |   License, changelog
+      |   /lists              owners.lst, channels.lst, smack.lst, sniglets.lst
+      |   |   /admins         one admin list per channel
+      |   /pig2               win records, and one folder per channel
+      |
+      /logs                   botlog, one chat log per channel, startbot.out
+      /run                    the console's pipe and the bot's pid
+
+THE 2007 CONTACTS:
+These are kept for the record, as they were written in 2007.
+Visit http://bashscripts.org and go to the bbots forum and help work on modules :)
+Find jbsnake or crouse on irc.freenode.net in #bbots ..... or visit www.bashscripts.org or www.bbots.org

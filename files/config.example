@@ -1,0 +1,21 @@
+####################################
+#         SET VARIABLES            #
+####################################
+# Copy this file to files/config and fill it in. runme.sh does the copy
+# for you the first time it runs.
+
+SERVER="irc.chat.twitch.tv"   # Twitch chat server
+PORT="6697"                   # TLS port
+version="BETA 3.0 (twitch)"
+CHANNEL="#yourchannel"        # the bot's home channel: lowercase, with the #
+NICK=""                       # the bot account's Twitch login, lowercase
+TOKEN_FILE="files/.token"     # holds the OAuth token, kept out of this file
+CLIENT_ID=""                  # from your app at https://dev.twitch.tv/console
+GREETING=""                   # said on joining; leave empty to join silently
+trig="!"                      # command trigger
+ascii="(>'-')> "              # prefix on the bot's replies
+CONSOLE_NAME="bot-handler"   # the name bbots-ctl commands run under
+
+####################################
+#     END OF VARIABLES             #
+####################################

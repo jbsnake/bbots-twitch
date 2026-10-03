@@ -1,0 +1,60 @@
+bbots CHANGELOG
+===============
+
+BETA 3.0 (twitch) - October 2026
+--------------------------------
+The Twitch port. Same bot, same module system, new network.
+
+Connection
+  * Connects to Twitch chat over TLS with ncat. ntcpclient is retired.
+  * Logs in with a token from the bot's own Twitch application.
+    bin/gettoken.sh gets it once and startbot.sh renews it before
+    every connection.
+  * Reconnects on a dropped connection, when Twitch asks it to, and
+    when nothing has been heard from Twitch for ten minutes.
+  * Refuses to start a second copy of itself.
+
+People
+  * Three tiers: owner (.omod), admin (.amod), anyone (.umod).
+    Admins are a channel's broadcaster, its moderators and the names
+    on its admin list. New command: admin list | add | rm.
+  * Owners are whoever is on the owner list. Twitch logins cannot be
+    borrowed the way IRC nicks could.
+  * Tier changes: o2u and u2o as before, plus o2a, a2o, u2a, a2u.
+
+Channels
+  * The bot can be in many channels. join and part manage the list,
+    which is kept in files/lists/channels.lst and rejoined on start.
+  * It talks more slowly where it is not a moderator, as Twitch requires.
+
+Modules
+  * Default trigger is ! (was .).
+  * load refuses a module that has a syntax error.
+  * Private messages are gone on Twitch. What used to be a private
+    message is said in the channel.
+  * pig2: every command under "pig", one game per channel, games
+    survive a restart, 2007 win records carried over.
+  * translate: uses the MyMemory service.
+  * fortune: one line, in the channel.
+  * rolldice: any of the three numbers may be left out.
+  * additem: owner only, and it will not write to the owner or
+    channel lists.
+  * trig: "!trig" works now. In 2007 it compared five characters to
+    six and never matched.
+  * uptime: answers to "botuptime".
+  * Modules check their input before using it.
+  * Not carried over: irccommands, beep, beep_toggle, cal.
+
+Tools
+  * bin/bbots-ctl: a console that passes commands to the running bot
+    without anything appearing in chat.
+  * runme.sh: starts the bot in the background, and gained the
+    console and Twitch login options.
+
+BETA 2.0 - June 2007
+--------------------
+  * The last IRC release this port was made from.
+
+BETA 0.10 - early 2007
+----------------------
+  * First release.
