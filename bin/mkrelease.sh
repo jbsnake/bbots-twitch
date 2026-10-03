@@ -7,11 +7,18 @@
 #    Licensed under the GNU GPL, version 2 or (at your option) any later version.
 #
 #    Usage:
-#      bin/mkrelease.sh [--with-sniglets] [output folder]
+#      bin/mkrelease.sh [--update] [--with-sniglets] [output folder]
 #
-#    Makes, in the output folder (default: ~/bbots-release):
+#    The first time, it makes, in the output folder (default: ~/bbots-release):
 #      bbots/                 a clean tree, ready for "git init"
 #      bbots-<version>.tgz    the same tree as a tarball
+#
+#    --update is for every time after that. It refreshes an existing bbots/
+#    that is already a git repository: the published files are replaced with
+#    the ones from this working copy, modules that no longer exist are
+#    removed, and .git, LICENSE and anything else you added at the top of
+#    the repository are left alone. Then it shows what changed, ready for
+#    you to commit and push.
 #
 #    Left OUT, because they belong to this install and not to the project:
 #      files/.token, files/.refresh, files/config    (secrets and settings)
@@ -28,13 +35,21 @@ cd "$(dirname "$(readlink -f "$0")")/.." || exit 1
 source files/config
 
 withSniglets=no
-if [[ "$1" == "--with-sniglets" ]]
-then
-	withSniglets=yes
+update=no
+while [[ "$1" == --* ]]
+do
+	case "$1" in
+		--with-sniglets)	withSniglets=yes ;;
+		--update)		update=yes ;;
+		*)	echo "mkrelease: unknown option $1" >&2
+			echo "Usage: bin/mkrelease.sh [--update] [--with-sniglets] [output folder]" >&2
+			exit 1
+			;;
+	esac
 	shift
-fi
+done
 out="${1:-$HOME/bbots-release}"
-stage="${out}/bbots"
+target="${out}/bbots"
 
 # BETA 3.0 (twitch) -> beta_3_0
 tag="${version%% (*}"
@@ -43,18 +58,32 @@ tag="${tag//[ .]/_}"
 [[ "$tag" =~ ^[a-z0-9_]{1,30}$ ]] || tag="release"
 tarball="${out}/bbots-${tag}.tgz"
 
-if [[ -e "$stage" ]]
+if [[ "$update" == yes ]]
 then
-	echo "mkrelease: ${stage} already exists. Remove it or choose another folder:"
-	echo "           bin/mkrelease.sh /some/other/folder"
+	if [[ ! -d "${target}/.git" || ! -e "${target}/runme.sh" ]]
+	then
+		echo "mkrelease: ${target} is not a bbots git repository, so there is" >&2
+		echo "           nothing to update. Run without --update to make it first." >&2
+		exit 1
+	fi
+elif [[ -e "$target" ]]
+then
+	echo "mkrelease: ${target} already exists."
+	echo "           To refresh it from this working copy:  bin/mkrelease.sh --update"
+	echo "           To build somewhere else:               bin/mkrelease.sh /some/other/folder"
 	exit 1
 fi
+
+# The clean tree is always built in a scratch folder first, and only put
+# in place once it has passed the check for secrets.
+scratch="$(mktemp -d)" || exit 1
+stage="${scratch}/bbots"
 
 # fail message -> removes the half-built tree and stops
 fail ()
 {
 	echo "mkrelease: $1" >&2
-	rm -rf "$stage"
+	rm -rf "$scratch"
 	exit 1
 }
 
@@ -96,7 +125,7 @@ cat > "${stage}/files/config.example" << 'EOF'
 
 SERVER="irc.chat.twitch.tv"   # Twitch chat server
 PORT="6697"                   # TLS port
-version="BETA 3.0 (twitch)"
+version="@VERSION@"
 CHANNEL="#yourchannel"        # the bot's home channel: lowercase, with the #
 NICK=""                       # the bot account's Twitch login, lowercase
 TOKEN_FILE="files/.token"     # holds the OAuth token, kept out of this file
@@ -110,6 +139,10 @@ CONSOLE_NAME="bot-handler"   # the name bbots-ctl commands run under
 #     END OF VARIABLES             #
 ####################################
 EOF
+
+# the example config carries whatever version this working copy is at
+exampleText="$(< "${stage}/files/config.example")"
+printf '%s\n' "${exampleText//@VERSION@/"$version"}" > "${stage}/files/config.example"
 
 {
 	cat << 'EOF'
@@ -168,12 +201,50 @@ then
 	fail "nothing was packed"
 fi
 
-tar -czf "$tarball" -C "$out" bbots || fail "could not write ${tarball}"
+mkdir -p "$out" || fail "could not create ${out}"
+tar -czf "$tarball" -C "$scratch" bbots || fail "could not write ${tarball}"
 
-echo "Clean tree:  ${stage}"
-echo "Tarball:     ${tarball}"
-echo
-echo "$(find "$stage" -type f | wc -l) files, $(find "${stage}/bin/inactivemodules" -name '*.?mod' | wc -l) modules, all shipped inactive."
+fileCount="$(find "$stage" -type f | wc -l)"
+moduleCount="$(find "${stage}/bin/inactivemodules" -name '*.?mod' | wc -l)"
+
+if [[ "$update" == yes ]]
+then
+	# bin, files and logs are replaced whole, so a module that was deleted
+	# here disappears there too. Everything else at the top of the
+	# repository (.git, LICENSE, anything you added) is not touched.
+	rm -rf "${target}/bin" "${target}/files" "${target}/logs"
+	cp -a "${stage}/." "${target}/" || fail "could not copy into ${target}"
+	rm -rf "$scratch"
+	echo "Updated:     ${target}"
+	echo "Tarball:     ${tarball}"
+	echo
+	echo "${fileCount} files, ${moduleCount} modules, all shipped inactive."
+	echo
+	if command -v git > /dev/null
+	then
+		changes="$(git -C "$target" status --short)"
+		if [[ -z "$changes" ]]
+		then
+			echo "Nothing changed: the repository already matches this working copy."
+		else
+			echo "What changed (M = modified, D = deleted, ?? = new):"
+			echo "$changes"
+			echo
+			echo "To publish it:"
+			echo "  cd ${target}"
+			echo "  git add -A"
+			echo "  git commit -m \"describe the change\""
+			echo "  git push"
+		fi
+	fi
+else
+	mv "$stage" "$target" || fail "could not move the clean tree to ${target}"
+	rm -rf "$scratch"
+	echo "Clean tree:  ${target}"
+	echo "Tarball:     ${tarball}"
+	echo
+	echo "${fileCount} files, ${moduleCount} modules, all shipped inactive."
+fi
 if [[ "$withSniglets" != yes ]]
 then
 	echo "sniglets.lst was left out; an example of the format is included."
